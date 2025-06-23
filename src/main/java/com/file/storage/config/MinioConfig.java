@@ -30,14 +30,16 @@ public class MinioConfig {
                     .credentials(accessKey, secretKey)
                     .build();
 
-            boolean isExist = minioClient.bucketExists(BucketExistsArgs.builder()
-                    .bucket(bucketName)
-                    .build());
+            boolean isExist = minioClient.bucketExists(
+                    BucketExistsArgs.builder()
+                            .bucket(bucketName)
+                            .build());
 
             if (!isExist) {
-                minioClient.makeBucket(MakeBucketArgs.builder()
-                        .bucket(bucketName)
-                        .build());
+                minioClient.makeBucket(
+                        MakeBucketArgs.builder()
+                                .bucket(bucketName)
+                                .build());
             }
 
             return minioClient;

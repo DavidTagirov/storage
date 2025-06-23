@@ -1,9 +1,9 @@
 package com.file.storage.controller;
 
 import com.file.storage.dto.ResourceInfoResponse;
+import com.file.storage.exceptions.ResourceAlreadyExistsException;
 import com.file.storage.exceptions.ResourceNotFoundException;
 import com.file.storage.service.ResourceService;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.core.io.InputStreamResource;
@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.InputStream;
 import java.nio.file.InvalidPathException;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/resource")
@@ -83,6 +84,41 @@ public class ResourceController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build(); //401
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build(); //404
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();//500
+        }
+    }
+
+    @GetMapping("/move")
+    public ResponseEntity<ResourceInfoResponse> moveResource(@RequestParam String from,
+                                                             @RequestParam String to,
+                                                             @AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            ResourceInfoResponse resourceInfoResponse = resourceService.moveResource(userDetails.getUsername(), from, to);
+            return ResponseEntity.ok(resourceInfoResponse);
+        } catch (InvalidPathException e) {
+            return ResponseEntity.badRequest().build(); //400
+        } catch (UsernameNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build(); //401
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build(); //404
+        } catch (ResourceAlreadyExistsException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).build(); //409
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();//500
+        }
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<?> searchResource(@RequestParam String query,
+                                            @AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            List<ResourceInfoResponse> resourceInfoResponse = resourceService.searchResource(userDetails.getUsername(), query);
+            return ResponseEntity.ok(resourceInfoResponse);
+        } catch (InvalidPathException e) {
+            return ResponseEntity.badRequest().build(); //400
+        } catch (UsernameNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build(); //401
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();//500
         }

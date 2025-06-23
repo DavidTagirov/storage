@@ -2,6 +2,7 @@ package com.file.storage.service;
 
 import com.file.storage.ResourceType;
 import com.file.storage.dto.ResourceInfoResponse;
+import com.file.storage.exceptions.ResourceAlreadyExistsException;
 import com.file.storage.exceptions.ResourceNotFoundException;
 import com.file.storage.model.User;
 import com.file.storage.repository.UserRepository;
@@ -19,8 +20,9 @@ import java.io.InputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.file.InvalidPathException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -43,11 +45,10 @@ public class ResourceService {
     public ResourceInfoResponse getResourceInfo(String username, String path) {
         validatePath(path);
 
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         String fullPath = "user-" + user.getId() + "-files/" + path;
-        if (resourceExist(fullPath)) {
+        if (resourceExists(fullPath)) {
             throw new ResourceNotFoundException(fullPath);
         }
 
@@ -55,23 +56,12 @@ public class ResourceService {
     }
 
     private ResourceInfoResponse getFileInfo(String fullPath, String path) {
-        try {
-            StatObjectResponse stat = minioClient.statObject(
-                    StatObjectArgs.builder()
-                            .bucket(bucketName)
-                            .object(fullPath)
-                            .build()
-            );
-
-            return new ResourceInfoResponse(
-                    extractParentPath(path),
-                    extractName(path),
-                    stat.size(),
-                    ResourceType.FILE
-            );
-        } catch (Exception e) {
-            throw new ResourceAccessException(e.getMessage());
-        }
+        return new ResourceInfoResponse(
+                extractParentPath(path),
+                extractName(path),
+                getFileSize(fullPath),
+                ResourceType.FILE
+        );
     }
 
     private ResourceInfoResponse getDirectoryInfo(String path) {
@@ -99,15 +89,28 @@ public class ResourceService {
         return path.substring(0, index);
     }
 
-    private boolean resourceExist(String fullPath) {
+    private boolean resourceExists(String fullPath) {
         try {
-            minioClient.statObject(StatObjectArgs.builder()
-                    .bucket(bucketName)
-                    .object(fullPath)
-                    .build());
+            if (fullPath.endsWith("/")) {
+                return minioClient.listObjects(
+                        ListObjectsArgs.builder()
+                                .bucket(bucketName)
+                                .prefix(fullPath)
+                                .maxKeys(1)
+                                .build()
+                ).iterator().hasNext();
+            } else {
+                minioClient.statObject(
+                        StatObjectArgs.builder()
+                                .bucket(bucketName)
+                                .object(fullPath)
+                                .build()
+                );
+                return true;
+            }
         } catch (ErrorResponseException e) {
             if (e.errorResponse().code().equals("NoSuchKey")) {
-                return true;
+                return false;
             }
         } catch (Exception e) {
             throw new ResourceAccessException("Failed to check resource existence");
@@ -124,11 +127,10 @@ public class ResourceService {
     public void deleteResource(String username, String path) {
         validatePath(path);
 
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         String fullPath = "user-" + user.getId() + "-files/" + path;
-        if (resourceExist(fullPath)) {
+        if (resourceExists(fullPath)) {
             throw new ResourceNotFoundException(fullPath);
         }
 
@@ -178,11 +180,10 @@ public class ResourceService {
     public InputStream downloadResource(String username, String path) {
         validatePath(path);
 
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         String fullPath = "user-" + user.getId() + "-files/" + path;
-        if (!resourceExist(fullPath)) {
+        if (!resourceExists(fullPath)) {
             throw new ResourceNotFoundException(fullPath);
         }
 
@@ -217,21 +218,24 @@ public class ResourceService {
     }
 
     private void addFilesToZip(ZipOutputStream zipOutputStream, String fullPath) {
-        for (var i : minioClient.listObjects(
+        var objects = minioClient.listObjects(
                 ListObjectsArgs.builder()
                         .bucket(bucketName)
                         .prefix(fullPath)
                         .recursive(true)
-                        .build())) {
+                        .build()
+        );
+
+        for (var o : objects) {
             try {
-                if (!i.get().isDir()) {
-                    String fileName = i.get().objectName().substring(fullPath.length());
+                if (!o.get().isDir()) {
+                    String fileName = o.get().objectName().substring(fullPath.length());
                     zipOutputStream.putNextEntry(new ZipEntry(fileName));
 
                     minioClient.getObject(
                             GetObjectArgs.builder()
                                     .bucket(bucketName)
-                                    .object(i.get().objectName())
+                                    .object(o.get().objectName())
                                     .build()
                     ).transferTo(zipOutputStream);
 
@@ -240,6 +244,113 @@ public class ResourceService {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
+        }
+    }
+
+    public ResourceInfoResponse moveResource(String username, String from, String to) {
+        validatePath(from);
+        validatePath(to);
+
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        String fullFrom = "user-" + user.getId() + "-files/" + from;
+        if (!resourceExists(fullFrom)) {
+            throw new ResourceNotFoundException(fullFrom);
+        }
+
+        String fullTo = "user-" + user.getId() + "-files/" + to;
+        if (resourceExists(fullTo)) {
+            throw new ResourceAlreadyExistsException(fullTo);
+        }
+
+        if (!from.endsWith("/")) {
+            return moveFile(fullFrom, fullTo);
+        } else {
+            throw new ResourceAlreadyExistsException("You can't move a folder. " + fullTo);
+        }
+    }
+
+    private ResourceInfoResponse moveFile(String fullFrom, String fullTo) {
+        try {
+            minioClient.copyObject(
+                    CopyObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(fullTo)
+                            .source(CopySource.builder()
+                                    .bucket(bucketName)
+                                    .object(fullFrom)
+                                    .build())
+                            .build()
+            );
+
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(fullFrom)
+                            .build()
+            );
+
+            return new ResourceInfoResponse(
+                    extractParentPath(fullTo),
+                    extractName(fullTo),
+                    getFileSize(fullTo),
+                    ResourceType.FILE
+            );
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public List<ResourceInfoResponse> searchResource(String username, String query) {
+        validatePath(query);
+
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        String fullQuery = "user-" + user.getId() + "-files/" + query;
+
+        return searchFile(fullQuery);
+    }
+
+    private List<ResourceInfoResponse> searchFile(String fullQuery) {
+        List<ResourceInfoResponse> resourceList = new ArrayList<>();
+
+        var objects = minioClient.listObjects(
+                ListObjectsArgs.builder()
+                        .bucket(bucketName)
+                        .prefix(fullQuery)
+                        .recursive(true)
+                        .build()
+        );
+
+        try {
+            for (var o : objects) {
+                String filePath = o.get().objectName();
+
+                if (filePath.toLowerCase().contains(fullQuery.toLowerCase())) {
+                    resourceList.add(new ResourceInfoResponse(
+                            extractParentPath(filePath),
+                            extractName(filePath),
+                            getFileSize(filePath),
+                            ResourceType.FILE
+                    ));
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return resourceList;
+    }
+
+    private Long getFileSize(String fullPath) {
+        try {
+            return minioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(fullPath)
+                            .build()
+            ).size();
+        } catch (Exception e) {
+            return null;
         }
     }
 }
