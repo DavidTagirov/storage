@@ -35,7 +35,7 @@ public class UserService {
     }
 
     public UserResponse signIn(SignInRequest signInRequest) {
-        if (!userRepository.existUserByUsernameAndPassword(signInRequest.username(), signInRequest.password()) {
+        if (!userRepository.existUserByUsernameAndPassword(signInRequest.username(), signInRequest.password())) {
             throw new WrongUsernameOrPassword();
         }
         User user = userRepository.findByUsernameAndPassword(signInRequest.username(), signInRequest.password());

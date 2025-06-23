@@ -49,14 +49,14 @@ public class AuthController {
     }
 
     @PostMapping("/sign-out")
-    public void signOut() {
+    public ResponseEntity<Void> signOut() {
         try {
             userService.signOut();
-            ResponseEntity.noContent().build();
+            return ResponseEntity.noContent().build();
         } catch (NullPointerException e) {
-            ResponseEntity.status(401).build();
+            return ResponseEntity.status(401).build();
         } catch (Exception e) {
-            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }
