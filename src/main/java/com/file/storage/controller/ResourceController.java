@@ -21,7 +21,7 @@ import java.nio.file.InvalidPathException;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/resource")
+@RequestMapping("/api")
 @Setter
 @Getter
 public class ResourceController {
@@ -31,9 +31,9 @@ public class ResourceController {
         this.resourceService = resourceService;
     }
 
-    @GetMapping
-    public ResponseEntity<ResourceInfoResponse> getResource(@RequestParam String path,
-                                                            @AuthenticationPrincipal UserDetails userDetails) {
+    @GetMapping({"/resource", "/directory"})
+    public ResponseEntity<ResourceInfoResponse> getResourceOrDirectory(@RequestParam String path,
+                                                                       @AuthenticationPrincipal UserDetails userDetails) {
         try {
             ResourceInfoResponse resourceInfoResponse = resourceService.getResourceInfo(userDetails.getUsername(), path);
             return ResponseEntity.ok(resourceInfoResponse);
@@ -48,7 +48,7 @@ public class ResourceController {
         }
     }
 
-    @DeleteMapping
+    @DeleteMapping("/resource")
     public ResponseEntity<Void> deleteResource(@RequestParam String path,
                                                @AuthenticationPrincipal UserDetails userDetails) {
         try {
@@ -65,7 +65,7 @@ public class ResourceController {
         }
     }
 
-    @GetMapping("/download")
+    @GetMapping("/resource/download")
     public ResponseEntity<InputStreamResource> downloadResource(@RequestParam String path,
                                                                 @AuthenticationPrincipal UserDetails userDetails) {
         try {
@@ -90,7 +90,7 @@ public class ResourceController {
         }
     }
 
-    @GetMapping("/move")
+    @GetMapping("/resource/move")
     public ResponseEntity<ResourceInfoResponse> moveResource(@RequestParam String from,
                                                              @RequestParam String to,
                                                              @AuthenticationPrincipal UserDetails userDetails) {
@@ -110,7 +110,7 @@ public class ResourceController {
         }
     }
 
-    @GetMapping("/search")
+    @GetMapping("/resource/search")
     public ResponseEntity<?> searchResource(@RequestParam String query,
                                             @AuthenticationPrincipal UserDetails userDetails) {
         try {
@@ -125,7 +125,7 @@ public class ResourceController {
         }
     }
 
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/resource", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadResource(@RequestParam String path,
                                             @RequestParam("file") List<MultipartFile> files,
                                             @AuthenticationPrincipal UserDetails userDetails) {
@@ -136,6 +136,26 @@ public class ResourceController {
             return ResponseEntity.badRequest().build(); //400
         } catch (UsernameNotFoundException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build(); //401
+        } catch (ResourceAlreadyExistsException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).build(); //409
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();//500
+        }
+    }
+
+    @PostMapping("/directory")
+    public ResponseEntity<ResourceInfoResponse> createDirectory(@RequestParam String path,
+                                                                @AuthenticationPrincipal UserDetails userDetails) {
+
+        try {
+            ResourceInfoResponse resourceInfoResponse = resourceService.createDirectory(userDetails.getUsername(), path);
+            return ResponseEntity.status(HttpStatus.CREATED).body(resourceInfoResponse);
+        } catch (InvalidPathException e) {
+            return ResponseEntity.badRequest().build(); //400
+        } catch (UsernameNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build(); //401
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build(); //404
         } catch (ResourceAlreadyExistsException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).build(); //409
         } catch (Exception e) {
