@@ -14,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.nio.file.InvalidPathException;
@@ -119,6 +120,24 @@ public class ResourceController {
             return ResponseEntity.badRequest().build(); //400
         } catch (UsernameNotFoundException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build(); //401
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();//500
+        }
+    }
+
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> uploadResource(@RequestParam String path,
+                                            @RequestParam("file") List<MultipartFile> files,
+                                            @AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            List<ResourceInfoResponse> resourceInfoResponse = resourceService.uploadResource(userDetails.getUsername(), path, files);
+            return ResponseEntity.status(HttpStatus.CREATED).body(resourceInfoResponse);
+        } catch (InvalidPathException e) {
+            return ResponseEntity.badRequest().build(); //400
+        } catch (UsernameNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build(); //401
+        } catch (ResourceAlreadyExistsException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).build(); //409
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();//500
         }

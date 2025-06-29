@@ -14,14 +14,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PipedInputStream;
-import java.io.PipedOutputStream;
+import java.io.*;
 import java.nio.file.InvalidPathException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -352,5 +351,80 @@ public class ResourceService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    public List<ResourceInfoResponse> uploadResource(String username, String path, List<MultipartFile> files) {
+        validatePath(path);
+
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        String fullPath = "user-" + user.getId() + "-files/" + path;
+
+        List<ResourceInfoResponse> resourceList = new ArrayList<>();
+        for (MultipartFile file : files) {
+            fullPath += file.getOriginalFilename();
+            fullPath = fullPath.replaceAll("/+", "/");
+
+            if (resourceExists(fullPath)) {
+                throw new ResourceAlreadyExistsException(fullPath);
+            }
+
+            createParentDirectories(fullPath);
+
+            try {
+                resourceList.add(uploadFile(fullPath, file.getInputStream(), file.getSize()));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return resourceList;
+    }
+
+    private void createParentDirectories(String fullPath) {
+        List<String> folders = List.of(fullPath.split("/"));
+        StringBuilder builderPath = new StringBuilder();
+
+        for (String folder : folders) {
+            builderPath.append(folder).append("/");
+
+            if (!resourceExists(builderPath.toString())) {
+                createDirectory(builderPath.toString());
+            }
+        }
+    }
+
+    private void createDirectory(String path) {
+        try {
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(path)
+                            .stream(new ByteArrayInputStream(new byte[0]), 0, -1)
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private ResourceInfoResponse uploadFile(String fullPath, InputStream inputStream, long fileSize) {
+        try {
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(fullPath)
+                            .stream(inputStream, fileSize, -1)
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        return new ResourceInfoResponse(
+                extractParentPath(fullPath.substring(0, fullPath.lastIndexOf("/"))),
+                extractName(fullPath.substring(fullPath.lastIndexOf("/"))),
+                fileSize,
+                ResourceType.FILE
+        );
     }
 }
