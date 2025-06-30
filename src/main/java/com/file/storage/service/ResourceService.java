@@ -1,6 +1,6 @@
 package com.file.storage.service;
 
-import com.file.storage.ResourceType;
+import com.file.storage.dto.ResourceType;
 import com.file.storage.dto.ResourceInfoResponse;
 import com.file.storage.exceptions.ResourceAlreadyExistsException;
 import com.file.storage.exceptions.ResourceNotFoundException;
@@ -8,8 +8,7 @@ import com.file.storage.model.User;
 import com.file.storage.repository.UserRepository;
 import io.minio.*;
 import io.minio.errors.*;
-import lombok.Getter;
-import lombok.Setter;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -24,8 +23,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 @Service
-@Setter
-@Getter
 public class ResourceService {
     private final MinioClient minioClient;
     private final UserRepository userRepository;
@@ -46,7 +43,7 @@ public class ResourceService {
 
         String fullPath = "user-" + user.getId() + "-files/" + path;
         if (!resourceOrDirectoryExists(fullPath)) {
-            throw new ResourceNotFoundException(fullPath);
+            throw new ResourceNotFoundException();
         }
 
         return path.endsWith("/") ? getDirectoryInfo(path) : getFileInfo(fullPath, path);
@@ -169,7 +166,7 @@ public class ResourceService {
 
         String fullPath = "user-" + user.getId() + "-files/" + path;
         if (!resourceOrDirectoryExists(fullPath)) {
-            throw new ResourceNotFoundException(fullPath);
+            throw new ResourceNotFoundException();
         }
 
         if (path.endsWith("/")) {
@@ -222,7 +219,7 @@ public class ResourceService {
 
         String fullPath = "user-" + user.getId() + "-files/" + path;
         if (!resourceOrDirectoryExists(fullPath)) {
-            throw new ResourceNotFoundException(fullPath);
+            throw new ResourceNotFoundException();
         }
 
         if (path.endsWith("/")) {
@@ -293,18 +290,18 @@ public class ResourceService {
 
         String fullFrom = "user-" + user.getId() + "-files/" + from;
         if (!resourceOrDirectoryExists(fullFrom)) {
-            throw new ResourceNotFoundException(fullFrom);
+            throw new ResourceNotFoundException();
         }
 
         String fullTo = "user-" + user.getId() + "-files/" + to;
         if (resourceOrDirectoryExists(fullTo)) {
-            throw new ResourceAlreadyExistsException(fullTo);
+            throw new ResourceAlreadyExistsException();
         }
 
         if (!from.endsWith("/")) {
             return moveFile(fullFrom, fullTo);
         } else {
-            throw new ResourceAlreadyExistsException("You can't move a folder. " + fullTo);
+            throw new ResourceAlreadyExistsException();
         }
     }
 
@@ -405,7 +402,7 @@ public class ResourceService {
             fullPath = fullPath.replaceAll("/+", "/");
 
             if (resourceOrDirectoryExists(fullPath)) {
-                throw new ResourceAlreadyExistsException(fullPath);
+                throw new ResourceAlreadyExistsException();
             }
 
             createParentDirectories(fullPath);
@@ -476,10 +473,10 @@ public class ResourceService {
         String parentPath = getParentPath(fullPath);
 
         if (!resourceOrDirectoryExists(parentPath)) {
-            throw new ResourceNotFoundException(fullPath);
+            throw new ResourceNotFoundException();
         }
         if (resourceOrDirectoryExists(fullPath)) {
-            throw new ResourceAlreadyExistsException(fullPath);
+            throw new ResourceAlreadyExistsException();
         }
 
         createEmptyDirectory(fullPath);

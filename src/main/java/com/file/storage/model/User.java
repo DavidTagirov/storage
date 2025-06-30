@@ -21,7 +21,4 @@ public class User {
     @Column(nullable = false)
     @Size(min = 6, max = 50, message = "Password must be between 6 and 50 characters")
     private String password;
-
-    /*@Column(nullable = false)
-    private String role = "USER";*/
 }
