@@ -12,12 +12,14 @@ public class WebConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/**")
                 .addResourceLocations("classpath:/static/")
-                .resourceChain(true);
+                .setCachePeriod(0); // вместо .resourceChain(true);
     }
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
         registry.addViewController("/")
+                .setViewName("forward:/index.html");
+        registry.addViewController("/{path:[^\\.]*}") // этого не было
                 .setViewName("forward:/index.html");
     }
 }

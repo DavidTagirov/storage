@@ -3,6 +3,7 @@ package com.file.storage.model;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
@@ -18,7 +19,6 @@ public class User {
     @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
     private String username;
 
-    @Column(nullable = false)
-    @Size(min = 6, max = 50, message = "Password must be between 6 and 50 characters")
+    @Column(nullable = false, length = 255)
     private String password;
 }

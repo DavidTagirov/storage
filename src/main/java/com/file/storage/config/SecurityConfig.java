@@ -14,7 +14,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 
 import java.util.Collections;
 
@@ -25,48 +24,28 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-        /*http
-                .csrf(csrf -> csrf.disable())
+        http
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
                 .authorizeHttpRequests(authorizeRequests -> authorizeRequests
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers(
+                                "/",
+                                "/index.html",
+                                "/*.js",
+                                "/*.css",
+                                "/*.ico",
+                                "/static/**",
+                                "/assets/**",
+                                "/api/auth/**",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/api-docs/**"
+                        ).permitAll()
                         .anyRequest().authenticated()
-                )
-
-                .formLogin(form -> form
-                        .loginProcessingUrl("/api/auth/sign-in")
-                        .successHandler((request, response, auth) -> {
-                            response.setContentType("application/json");
-                            response.getWriter().write("{\"status\": \"success\"}");
-                        })
-                        .failureHandler((request, response, ex) -> {
-                            response.setStatus(401);
-                            response.getWriter().write("{\"error\": \"Invalid credentials\"}");
-                        })
-                )
-                .logout(logout -> logout
-                        .logoutUrl("/api/auth/sign-out")
-                        .deleteCookies("JSESSIONID")
-                        .invalidateHttpSession(true)
-                        .logoutSuccessHandler((request, response, auth) -> {
-                            response.setContentType("application/json");
-                            response.getWriter().write("{\"status\": \"success\"}");
-                        })
                 )
                 .sessionManagement(session -> session
                         .maximumSessions(1)
                         .maxSessionsPreventsLogin(false)
-                );*/
-
-        // Отключает Security полностью (только для тестов!). Удалить перед деплоем в продакшен
-        http
-                .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(authorizeRequests -> authorizeRequests
-                        .anyRequest().permitAll()
-                )
-                .formLogin(form -> form.disable()) // Полностью отключаем форму входа
-                .logout(logout -> logout.disable()) // Отключаем стандартный logout
-                .httpBasic(httpBasic -> httpBasic.disable());
+                );
 
         return http.build();
     }
@@ -77,18 +56,11 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityContextLogoutHandler logoutHandler() {
-        SecurityContextLogoutHandler handler = new SecurityContextLogoutHandler();
-        handler.setClearAuthentication(true);
-        handler.setInvalidateHttpSession(true);
-        return handler;
-    }
-
-    @Bean
     public AuthenticationManager authenticationManager(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder);
+        provider.setHideUserNotFoundExceptions(false);
         return new ProviderManager(provider);
     }
 
@@ -98,8 +70,8 @@ public class SecurityConfig {
                 .map(user -> new User(
                         user.getUsername(),
                         user.getPassword(),
-                        Collections.emptyList()
+                        Collections.emptyList() // Здесь должны быть роли/полномочия, если они есть
                 ))
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
     }
 }

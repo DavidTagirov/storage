@@ -8,6 +8,10 @@ import com.file.storage.exceptions.UnauthorizedUserException;
 import com.file.storage.exceptions.UsernameAlreadyExistsException;
 import com.file.storage.exceptions.WrongUsernameOrPassword;
 import com.file.storage.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,9 +25,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Tag(name = "Authentication", description = "API for user authentication and registration")
 public class AuthController {
     private final AuthService authService;
 
+    @Operation(summary = "Register new user", description = "Creates a new user account and returns user data")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "User successfully registered"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data"),
+            @ApiResponse(responseCode = "409", description = "Username already exists"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
     @PostMapping("/sign-up")
     public ResponseEntity<?> signUp(@Valid @RequestBody SignUpRequest signUpRequest) {
         try {
@@ -36,6 +48,13 @@ public class AuthController {
         }
     }
 
+    @Operation(summary = "Authenticate user", description = "Authenticates user and creates a new session")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "User successfully authenticated"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data"),
+            @ApiResponse(responseCode = "401", description = "Invalid credentials"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
     @PostMapping("/sign-in")
     public ResponseEntity<?> signIn(@Valid @RequestBody SignInRequest signInRequest) {
         try {
@@ -48,6 +67,12 @@ public class AuthController {
         }
     }
 
+    @Operation(summary = "Logout user", description = "Terminates the current user session")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "User successfully logged out"),
+            @ApiResponse(responseCode = "401", description = "User not authenticated"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
     @PostMapping("/sign-out")
     public ResponseEntity<?> signOut(HttpServletRequest request) {
         try {

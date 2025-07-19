@@ -3,21 +3,24 @@ package com.file.storage.service;
 import com.file.storage.dto.SignInRequest;
 import com.file.storage.dto.SignUpRequest;
 import com.file.storage.dto.UserResponse;
-import com.file.storage.exceptions.UnauthorizedUserException;
 import com.file.storage.exceptions.UsernameAlreadyExistsException;
+import com.file.storage.exceptions.WrongUsernameOrPassword;
 import com.file.storage.model.User;
 import com.file.storage.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -27,7 +30,9 @@ public class AuthService {
 
     @Transactional
     public UserResponse signUp(SignUpRequest request) {
+        log.info("Attempting to register user: {}", request.username());
         if (userRepository.existsByUsername(request.username())) {
+            log.warn("Username already exists: {}", request.username());
             throw new UsernameAlreadyExistsException();
         }
 
@@ -35,27 +40,48 @@ public class AuthService {
         user.setUsername(request.username());
         user.setPassword(passwordEncoder.encode(request.password()));
         userRepository.save(user);
+        log.info("User registered successfully: {}", user);
+
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        request.username(),
+                        request.password()
+                )
+        );
+        SecurityContextHolder.getContext().setAuthentication(authentication);
 
         return new UserResponse(user.getUsername());
     }
 
     public UserResponse signIn(SignInRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.username(), request.password())
-        );
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.username(), request.password())
+            );
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        return new UserResponse(request.username());
+            return new UserResponse(request.username());
+        } catch (AuthenticationException e){
+            log.warn("Failed login attempt for user: {}", request.username());
+            throw new WrongUsernameOrPassword();
+        }
     }
 
     public void signOut(HttpServletRequest request) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        /*Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        if (auth != null) {
-            new SecurityContextLogoutHandler().logout(request, null, auth);
+        if (authentication != null) {
+            new SecurityContextLogoutHandler().logout(request, null, authentication);
         } else {
             throw new UnauthorizedUserException();
+        }*/
+
+        SecurityContextHolder.clearContext();
+        HttpSession session = request.getSession(false);
+
+        if (session != null) {
+            session.invalidate();
         }
     }
 }
