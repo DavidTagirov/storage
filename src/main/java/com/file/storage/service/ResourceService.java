@@ -9,6 +9,7 @@ import com.file.storage.repository.UserRepository;
 import io.minio.*;
 import io.minio.errors.*;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,16 @@ public class ResourceService {
         this.minioClient = minioClient;
         this.userRepository = userRepository;
         this.bucketName = bucketName;
+    }
+
+    @PostConstruct
+    public void initUserFolders() {
+        userRepository.findAll().forEach(user -> {
+            String userFolder = "user-" + user.getId() + "-files/";
+            if (!resourceOrDirectoryExists(userFolder)) {
+                createEmptyDirectory(userFolder);
+            }
+        });
     }
 
     public ResourceInfoResponse getResourceInfo(String username, String path) {
@@ -394,37 +405,40 @@ public class ResourceService {
 
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        String fullPath = "user-" + user.getId() + "-files/" + path;
+        String basePath = "user-" + user.getId() + "-files/" + path;
+        basePath = basePath.replaceAll("/+", "/"); // Нормализуем путь
 
         List<ResourceInfoResponse> resourceList = new ArrayList<>();
         for (MultipartFile file : files) {
-            fullPath += file.getOriginalFilename();
-            fullPath = fullPath.replaceAll("/+", "/");
+            String fullPath = basePath + file.getOriginalFilename();
 
             if (resourceOrDirectoryExists(fullPath)) {
                 throw new ResourceAlreadyExistsException();
             }
 
-            createParentDirectories(fullPath);
+            createParentDirectories(basePath);
 
-            try {
-                resourceList.add(uploadFile(fullPath, file.getInputStream(), file.getSize()));
+            try (InputStream inputStream = file.getInputStream()) {
+                resourceList.add(uploadFile(fullPath, inputStream, file.getSize()));
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new RuntimeException("Failed to upload file: " + file.getOriginalFilename(), e);
             }
         }
         return resourceList;
     }
 
-    private void createParentDirectories(String fullPath) {
-        List<String> folders = List.of(fullPath.split("/"));
-        StringBuilder builderPath = new StringBuilder();
+    private void createParentDirectories(String path) {
+        String[] parts = path.split("/");
+        StringBuilder currentPath = new StringBuilder();
 
-        for (String folder : folders) {
-            builderPath.append(folder).append("/");
+        for (String part : parts) {
+            if (part.isEmpty()) continue;
 
-            if (!resourceOrDirectoryExists(builderPath.toString())) {
-                createEmptyDirectory(builderPath.toString());
+            currentPath.append(part).append("/");
+            String dirPath = currentPath.toString();
+
+            if (!resourceOrDirectoryExists(dirPath)) {
+                createEmptyDirectory(dirPath);
             }
         }
     }
@@ -475,6 +489,7 @@ public class ResourceService {
         if (!resourceOrDirectoryExists(parentPath)) {
             throw new ResourceNotFoundException();
         }
+
         if (resourceOrDirectoryExists(fullPath)) {
             throw new ResourceAlreadyExistsException();
         }

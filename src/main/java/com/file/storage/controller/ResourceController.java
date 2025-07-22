@@ -146,7 +146,6 @@ public class ResourceController {
     @PostMapping("/directory")
     public ResponseEntity<?> createDirectory(@RequestParam String path,
                                              @AuthenticationPrincipal UserDetails userDetails) {
-
         if (userDetails == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401
         }

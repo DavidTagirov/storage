@@ -37,9 +37,9 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping("/sign-up")
-    public ResponseEntity<?> signUp(@Valid @RequestBody SignUpRequest signUpRequest) {
+    public ResponseEntity<?> signUp(@Valid @RequestBody SignUpRequest signUpRequest, HttpServletRequest request) { // <-- Добавлен HttpServletRequest
         try {
-            UserResponse userResponse = authService.signUp(signUpRequest);
+            UserResponse userResponse = authService.signUp(signUpRequest, request);
             return ResponseEntity.status(HttpStatus.CREATED).body(userResponse);
         } catch (UsernameAlreadyExistsException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("Username is already occupied")); //409
@@ -56,9 +56,9 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping("/sign-in")
-    public ResponseEntity<?> signIn(@Valid @RequestBody SignInRequest signInRequest) {
+    public ResponseEntity<?> signIn(@Valid @RequestBody SignInRequest signInRequest, HttpServletRequest request) {
         try {
-            UserResponse userResponse = authService.signIn(signInRequest);
+            UserResponse userResponse = authService.signIn(signInRequest, request);
             return ResponseEntity.ok(userResponse);
         } catch (WrongUsernameOrPassword e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("There is no such user or the password is incorrect")); //401
