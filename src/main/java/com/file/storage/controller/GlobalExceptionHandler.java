@@ -1,3 +1,4 @@
+/*
 package com.file.storage.controller;
 
 import com.file.storage.dto.ErrorResponse;
@@ -47,3 +48,4 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ErrorResponse("An internal server error occurred. Please check the logs."));
     }
 }
+*/

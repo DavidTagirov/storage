@@ -126,50 +126,6 @@ public class ResourceService {
         }
     }
 
-    private boolean resourceOrDirectoryExists(String fullPath) {
-        try {
-            if (fullPath.endsWith("/")) {
-                boolean hasObjectsFolder = minioClient.listObjects(
-                        ListObjectsArgs.builder()
-                                .bucket(bucketName)
-                                .prefix(fullPath)
-                                .maxKeys(1)
-                                .build()
-                ).iterator().hasNext();
-
-                boolean isEmptyFolder = minioClient.statObject(
-                        StatObjectArgs.builder()
-                                .bucket(bucketName)
-                                .object(fullPath)
-                                .build()
-                ) != null;
-
-                return hasObjectsFolder || isEmptyFolder;
-            } else {
-                minioClient.statObject(
-                        StatObjectArgs.builder()
-                                .bucket(bucketName)
-                                .object(fullPath)
-                                .build()
-                );
-                return true;
-            }
-        } catch (ErrorResponseException e) {
-            if (e.errorResponse().code().equals("NoSuchKey")) {
-                return false;
-            }
-        } catch (Exception e) {
-            throw new ResourceAccessException("Failed to check resource existence");
-        }
-        return false;
-    }
-
-    private void validatePath(String path) {
-        if (path == null || path.isEmpty()) {
-            throw new InvalidPathException("", "Invalid or missing path");
-        }
-    }
-
     public void deleteResource(String username, String path) {
         validatePath(path);
 
@@ -401,16 +357,24 @@ public class ResourceService {
     }
 
     public List<ResourceInfoResponse> uploadResource(String username, String path, List<MultipartFile> files) {
-        validatePath(path);
+        if (path == null || path.isEmpty()) {
+            path = "";
+        }
+
+        if (!path.endsWith("/")) {
+            path += "/";
+        }
+
+        ensureBucketExists();
 
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        String basePath = "user-" + user.getId() + "-files/" + path;
-        basePath = basePath.replaceAll("/+", "/"); // Нормализуем путь
+        String basePath = "user-" + user.getId() + "-files/" + path; //user-1-files/folder1/
+        basePath = basePath.replaceAll("/+", "/");
 
         List<ResourceInfoResponse> resourceList = new ArrayList<>();
         for (MultipartFile file : files) {
-            String fullPath = basePath + file.getOriginalFilename();
+            String fullPath = basePath + file.getOriginalFilename(); //user-1-files/folder1/archive.pdf
 
             if (resourceOrDirectoryExists(fullPath)) {
                 throw new ResourceAlreadyExistsException();
@@ -453,7 +417,22 @@ public class ResourceService {
                             .build()
             );
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Не удалось создать директорию: " + path, e);
+        }
+    }
+
+    private void ensureBucketExists() {
+        try {
+            boolean exists = minioClient.bucketExists(
+                    BucketExistsArgs.builder().bucket(bucketName).build()
+            );
+            if (!exists) {
+                minioClient.makeBucket(
+                        MakeBucketArgs.builder().bucket(bucketName).build()
+                );
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Не удалось проверить или создать бакет", e);
         }
     }
 
@@ -467,12 +446,12 @@ public class ResourceService {
                             .build()
             );
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Не удалось загрузить файл в MinIO: " + fullPath, e);
         }
 
         return new ResourceInfoResponse(
                 getParentPath(fullPath.substring(0, fullPath.lastIndexOf("/"))),
-                getName(fullPath.substring(fullPath.lastIndexOf("/"))),
+                getName(fullPath.substring(fullPath.lastIndexOf("/" + 1))),
                 fileSize,
                 ResourceType.FILE
         );
@@ -503,9 +482,53 @@ public class ResourceService {
                 ResourceType.DIRECTORY);
     }
 
+    private void validatePath(String path) {
+        if (path == null || path.isEmpty()) {
+            throw new InvalidPathException("", "Invalid or missing path");
+        }
+    }
+
     private void validateDirectoryPath(String path) {
         if (path == null || !path.endsWith("/")) {
             throw new InvalidPathException("", "Invalid or missing path");
+        }
+    }
+
+    private boolean resourceOrDirectoryExists(String fullPath) {
+        try {
+            if (fullPath.endsWith("/")) {
+                boolean hasObjectsFolder = minioClient.listObjects(
+                        ListObjectsArgs.builder()
+                                .bucket(bucketName)
+                                .prefix(fullPath)
+                                .maxKeys(1)
+                                .build()
+                ).iterator().hasNext();
+
+                boolean isEmptyFolder = minioClient.statObject(
+                        StatObjectArgs.builder()
+                                .bucket(bucketName)
+                                .object(fullPath)
+                                .build()
+                ) != null;
+
+                return hasObjectsFolder || isEmptyFolder;
+            } else {
+                minioClient.statObject(
+                        StatObjectArgs.builder()
+                                .bucket(bucketName)
+                                .object(fullPath)
+                                .build()
+                );
+                return true;
+            }
+        } catch (ErrorResponseException e) {
+            if (e.errorResponse().code().equals("NoSuchKey")) {
+                return false;
+            }
+            throw new ResourceAccessException("Ошибка проверки существования ресурса");
+        } catch (Exception e) {
+            throw new ResourceAccessException("Failed to check resource existence");
         }
     }
 }
