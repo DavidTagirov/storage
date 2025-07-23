@@ -9,6 +9,7 @@ import com.file.storage.repository.UserRepository;
 import io.minio.*;
 import io.minio.errors.*;
 
+import io.minio.messages.Item;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -44,20 +45,30 @@ public class ResourceService {
             if (!resourceOrDirectoryExists(userFolder)) {
                 createEmptyDirectory(userFolder);
             }
+
+            ensureBucketExists();
         });
     }
 
     public ResourceInfoResponse getResourceInfo(String username, String path) {
-        validatePath(path);
+        if (path == null || path.isEmpty() || path.endsWith("/")) {
+            throw new InvalidPathException("", "Invalid or missing path");
+        }
 
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        String fullPath = "user-" + user.getId() + "-files/" + path;
+        String fullPath = ("user-" + user.getId() + "-files/" + path).replaceAll("/+", "/");
+
         if (!resourceOrDirectoryExists(fullPath)) {
             throw new ResourceNotFoundException();
         }
 
-        return path.endsWith("/") ? getDirectoryInfo(path) : getFileInfo(fullPath, path);
+        return new ResourceInfoResponse(
+                getParentPath(path),
+                getName(path),
+                getFileSize(fullPath),
+                ResourceType.FILE
+        );
     }
 
     private ResourceInfoResponse getFileInfo(String fullPath, String path) {
@@ -90,7 +101,7 @@ public class ResourceService {
                 return path;
             }
 
-            return path.substring(penultimateSlash + 1, path.length() - 2);
+            return path.substring(penultimateSlash + 1, path.length() - 1);
         } else {
             int lastSlash = path.lastIndexOf("/");
 
@@ -98,7 +109,7 @@ public class ResourceService {
                 return path;
             }
 
-            return path.substring(lastSlash, path.length() - 1);
+            return path.substring(lastSlash + 1);
         }
     }
 
@@ -131,7 +142,8 @@ public class ResourceService {
 
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        String fullPath = "user-" + user.getId() + "-files/" + path;
+        String fullPath = ("user-" + user.getId() + "-files/" + path).replaceAll("/+", "/");
+
         if (!resourceOrDirectoryExists(fullPath)) {
             throw new ResourceNotFoundException();
         }
@@ -184,7 +196,8 @@ public class ResourceService {
 
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        String fullPath = "user-" + user.getId() + "-files/" + path;
+        String fullPath = ("user-" + user.getId() + "-files/" + path).replaceAll("/+", "/");
+
         if (!resourceOrDirectoryExists(fullPath)) {
             throw new ResourceNotFoundException();
         }
@@ -255,12 +268,14 @@ public class ResourceService {
 
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        String fullFrom = "user-" + user.getId() + "-files/" + from;
+        String fullFrom = ("user-" + user.getId() + "-files/" + from).replaceAll("/+", "/");
+
         if (!resourceOrDirectoryExists(fullFrom)) {
             throw new ResourceNotFoundException();
         }
 
-        String fullTo = "user-" + user.getId() + "-files/" + to;
+        String fullTo = ("user-" + user.getId() + "-files/" + to).replaceAll("/+", "/");
+
         if (resourceOrDirectoryExists(fullTo)) {
             throw new ResourceAlreadyExistsException();
         }
@@ -308,7 +323,7 @@ public class ResourceService {
 
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        String fullQuery = "user-" + user.getId() + "-files/" + query;
+        String fullQuery = ("user-" + user.getId() + "-files/" + query).replaceAll("/+", "/");
 
         return searchFile(fullQuery);
     }
@@ -365,16 +380,13 @@ public class ResourceService {
             path += "/";
         }
 
-        ensureBucketExists();
-
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        String basePath = "user-" + user.getId() + "-files/" + path; //user-1-files/folder1/
-        basePath = basePath.replaceAll("/+", "/");
+        String basePath = ("user-" + user.getId() + "-files/" + path).replaceAll("/+", "/");
 
         List<ResourceInfoResponse> resourceList = new ArrayList<>();
         for (MultipartFile file : files) {
-            String fullPath = basePath + file.getOriginalFilename(); //user-1-files/folder1/archive.pdf
+            String fullPath = basePath + file.getOriginalFilename();
 
             if (resourceOrDirectoryExists(fullPath)) {
                 throw new ResourceAlreadyExistsException();
@@ -457,12 +469,89 @@ public class ResourceService {
         );
     }
 
-    public ResourceInfoResponse createDirectory(String username, String path) {
-        validateDirectoryPath(path);
+    public List<ResourceInfoResponse> getDirectoryInfo(String username, String path) {
+        path = validateDirectoryPath(path);
 
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        String fullPath = "user-" + user.getId() + "-files/" + path;
+        String fullPath = ("user-" + user.getId() + "-files/" + path).replaceAll("/+", "/");
+
+        if (!resourceOrDirectoryExists(fullPath)) {
+            throw new ResourceNotFoundException();
+        }
+
+        List<ResourceInfoResponse> resourceList = new ArrayList<>();
+
+        try {
+            var objects = getFolderItems(fullPath);
+
+            for (var o : objects) {
+                if (o.get().objectName().equals(fullPath)) {
+                    continue;
+                }
+
+                ResourceInfoResponse resource = createFileInfo(o.get(), fullPath);
+
+                if (resource != null) {
+                    resourceList.add(resource);
+                }
+            }
+
+            return resourceList;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to list directory contents", e);
+        }
+    }
+
+    private Iterable<Result<Item>> getFolderItems(String fullPath) {
+        return minioClient.listObjects(
+                ListObjectsArgs.builder()
+                        .bucket(bucketName)
+                        .prefix(fullPath)
+                        .delimiter("/")
+                        .recursive(false)
+                        .build()
+        );
+    }
+
+    private ResourceInfoResponse createFileInfo(Item item, String fullPath) {
+        String relativePath = item.objectName().substring(fullPath.length());
+
+        if (item.isDir()) {
+            return new ResourceInfoResponse(
+                    fullPath,
+                    relativePath,
+                    null,
+                    ResourceType.DIRECTORY
+            );
+        }
+
+        try {
+            var stat = minioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(item.objectName())
+                            .build()
+            );
+
+            return new ResourceInfoResponse(
+                    fullPath,
+                    relativePath,
+                    stat.size(),
+                    ResourceType.FILE
+            );
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public ResourceInfoResponse createDirectory(String username, String path) {
+        path = validateDirectoryPath(path);
+
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        String fullPath = ("user-" + user.getId() + "-files/" + path).replaceAll("/+", "/");
         String parentPath = getParentPath(fullPath);
 
         if (!resourceOrDirectoryExists(parentPath)) {
@@ -488,10 +577,20 @@ public class ResourceService {
         }
     }
 
-    private void validateDirectoryPath(String path) {
-        if (path == null || !path.endsWith("/")) {
+    private String validateDirectoryPath(String path) {
+        /*if (path == null || !path.endsWith("/")) {
+            throw new InvalidPathException("", "Invalid or missing path");
+        }*/
+
+        if (path == null || path.isEmpty()) {
             throw new InvalidPathException("", "Invalid or missing path");
         }
+
+        if (!path.endsWith("/")) {
+            path += "/";
+        }
+
+        return path;
     }
 
     private boolean resourceOrDirectoryExists(String fullPath) {

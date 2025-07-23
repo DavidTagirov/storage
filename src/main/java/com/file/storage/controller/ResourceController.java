@@ -25,9 +25,9 @@ import java.util.List;
 public class ResourceController {
     private final ResourceService resourceService;
 
-    @GetMapping({"/resource", "/directory"})
-    public ResponseEntity<?> getResourceOrDirectory(@RequestParam String path,
-                                                    @AuthenticationPrincipal UserDetails userDetails) {
+    @GetMapping("/resource")
+    public ResponseEntity<?> getResource(@RequestParam String path,
+                                         @AuthenticationPrincipal UserDetails userDetails) {
         if (userDetails == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401
         }
@@ -37,7 +37,7 @@ public class ResourceController {
         } catch (InvalidPathException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse("Invalid or missing path")); //400
         } catch (ResourceNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse("The resource or directory was not found")); //404
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse("The resource was not found")); //404
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ErrorResponse("Internal server error")); //500
         }
@@ -138,6 +138,24 @@ public class ResourceController {
             return ResponseEntity.badRequest().body(new ErrorResponse("Invalid or missing path")); //400
         } catch (ResourceAlreadyExistsException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("The file already exists")); //409
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ErrorResponse("Internal server error")); //500
+        }
+    }
+
+    @GetMapping("/directory")
+    public ResponseEntity<?> getDirectory(@RequestParam String path,
+                                          @AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401
+        }
+        try {
+            List<ResourceInfoResponse> resourceInfoResponse = resourceService.getDirectoryInfo(userDetails.getUsername(), path);
+            return ResponseEntity.ok(resourceInfoResponse);
+        } catch (InvalidPathException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse("Invalid or missing path")); //400
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse("The directory was not found")); //404
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ErrorResponse("Internal server error")); //500
         }
