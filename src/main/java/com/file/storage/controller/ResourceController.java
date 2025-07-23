@@ -126,7 +126,7 @@ public class ResourceController {
 
     @PostMapping(value = "/resource", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadResource(@RequestParam String path,
-                                            @RequestParam("file") List<MultipartFile> files,
+                                            @RequestParam("object") List<MultipartFile> files,
                                             @AuthenticationPrincipal UserDetails userDetails) {
         if (userDetails == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401

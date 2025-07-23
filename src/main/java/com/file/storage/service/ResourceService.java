@@ -451,7 +451,7 @@ public class ResourceService {
 
         return new ResourceInfoResponse(
                 getParentPath(fullPath.substring(0, fullPath.lastIndexOf("/"))),
-                getName(fullPath.substring(fullPath.lastIndexOf("/" + 1))),
+                getName(fullPath.substring(fullPath.lastIndexOf("/") + 1)),
                 fileSize,
                 ResourceType.FILE
         );
