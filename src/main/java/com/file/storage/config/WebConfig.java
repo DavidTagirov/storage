@@ -22,20 +22,13 @@ public class WebConfig implements WebMvcConfigurer {
                 .setViewName("forward:/index.html");
     }
 
-    /**
-     * Глобальная конфигурация CORS для всего приложения.
-     * Это необходимо для корректной работы с фронтендом, который запущен на другом порту,
-     * и решает проблемы с передачей cookie между доменами.
-     */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**") // Применяем ко всем путям внутри /api
-                // Разрешаем запросы от стандартных портов для фронтенда.
-                // Если ваш фронтенд работает на другом порту, добавьте его сюда.
+        registry.addMapping("/api/**")
                 .allowedOrigins("http://localhost:3000", "http://localhost:8081", "http://localhost:5173")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH") // Разрешенные методы
-                .allowedHeaders("*") // Разрешаем все заголовки
-                .allowCredentials(true) // <-- КРИТИЧЕСКИ ВАЖНО для работы с cookie и сессиями
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
+                .allowedHeaders("*")
+                .allowCredentials(true)
                 .maxAge(3600);
     }
 }

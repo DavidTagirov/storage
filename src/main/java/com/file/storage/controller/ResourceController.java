@@ -32,7 +32,7 @@ public class ResourceController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401
         }
         try {
-            ResourceInfoResponse resourceInfoResponse = resourceService.getResourceInfo(userDetails.getUsername(), path);
+            ResourceInfoResponse resourceInfoResponse = resourceService.getResourceInfo(path, userDetails.getUsername());
             return ResponseEntity.ok(resourceInfoResponse);
         } catch (InvalidPathException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse("Invalid or missing path")); //400
@@ -50,7 +50,7 @@ public class ResourceController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401
         }
         try {
-            resourceService.deleteResource(userDetails.getUsername(), path);
+            resourceService.deleteResource(path, userDetails.getUsername());
             return ResponseEntity.noContent().build();
         } catch (InvalidPathException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse("Invalid or missing path")); //400
@@ -68,7 +68,7 @@ public class ResourceController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401
         }
         try {
-            InputStream inputStream = resourceService.downloadResource(userDetails.getUsername(), path);
+            InputStream inputStream = resourceService.downloadResource(path, userDetails.getUsername());
 
             String fileName = path.endsWith("/")
                     ? path.replace("/", "") + ".zip"
@@ -95,7 +95,7 @@ public class ResourceController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401
         }
         try {
-            ResourceInfoResponse resourceInfoResponse = resourceService.moveResource(userDetails.getUsername(), from, to);
+            ResourceInfoResponse resourceInfoResponse = resourceService.moveResource(from, to, userDetails.getUsername());
             return ResponseEntity.ok(resourceInfoResponse);
         } catch (InvalidPathException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse("Invalid or missing path")); //400
@@ -115,7 +115,7 @@ public class ResourceController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401
         }
         try {
-            List<ResourceInfoResponse> resourceInfoResponse = resourceService.searchResource(userDetails.getUsername(), query);
+            List<ResourceInfoResponse> resourceInfoResponse = resourceService.searchResource(query, userDetails.getUsername());
             return ResponseEntity.ok(resourceInfoResponse);
         } catch (InvalidPathException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse("Invalid or missing path")); //400
@@ -132,7 +132,7 @@ public class ResourceController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401
         }
         try {
-            List<ResourceInfoResponse> resourceInfoResponse = resourceService.uploadResource(userDetails.getUsername(), path, files);
+            List<ResourceInfoResponse> resourceInfoResponse = resourceService.uploadResource(path, files, userDetails.getUsername());
             return ResponseEntity.status(HttpStatus.CREATED).body(resourceInfoResponse);
         } catch (InvalidPathException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse("Invalid or missing path")); //400
@@ -150,7 +150,7 @@ public class ResourceController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401
         }
         try {
-            List<ResourceInfoResponse> resourceInfoResponse = resourceService.getDirectoryInfo(userDetails.getUsername(), path);
+            List<ResourceInfoResponse> resourceInfoResponse = resourceService.getDirectoryInfo(path, userDetails.getUsername());
             return ResponseEntity.ok(resourceInfoResponse);
         } catch (InvalidPathException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse("Invalid or missing path")); //400
@@ -168,7 +168,7 @@ public class ResourceController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("The user is not authorized")); //401
         }
         try {
-            ResourceInfoResponse resourceInfoResponse = resourceService.createDirectory(userDetails.getUsername(), path);
+            ResourceInfoResponse resourceInfoResponse = resourceService.createDirectory(path, userDetails.getUsername());
             return ResponseEntity.status(HttpStatus.CREATED).body(resourceInfoResponse);
         } catch (InvalidPathException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse("Invalid or missing path")); //400

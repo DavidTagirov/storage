@@ -1,7 +1,7 @@
 window.APP_CONFIG = {
 
     //ссылка на ваш гитхаб репозиторий с проектом
-    githubLink: "https://gist.github.com/",
+    githubLink: "https://github.com/DavidTagirov/storage",
 
     //Имя, которое отображается в хедере
     mainName: "CLOUD STORAGE",
@@ -28,15 +28,15 @@ window.APP_CONFIG = {
 
     //корректное имя пользователя
     validUsername: {
-        minLength: 5,
-        maxLength: 20,
+        minLength: 3,
+        maxLength: 50,
         pattern: "^[a-zA-Z0-9]+[a-zA-Z_0-9]*[a-zA-Z0-9]+$",
     },
 
     //корректный пароль
     validPassword: {
         minLength: 5,
-        maxLength: 20,
+        maxLength: 255,
         pattern: "^[a-zA-Z0-9!@#$%^&*(),.?\":{}|<>[\\]/`~+=-_';]*$",
     },
 
