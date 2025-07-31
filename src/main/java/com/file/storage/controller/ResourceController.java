@@ -71,12 +71,15 @@ public class ResourceController {
             InputStream inputStream = resourceService.downloadResource(path, userDetails.getUsername());
 
             String fileName = path.endsWith("/")
-                    ? path.replace("/", "") + ".zip"
-                    : path.substring(path.lastIndexOf("/" + 1));
+                    ? path.replaceAll("/+$", "").replaceAll("^.*/", "") + ".zip"
+                    : path.substring(path.lastIndexOf("/") + 1);
 
+            MediaType contentType = path.endsWith("/")
+                    ? MediaType.parseMediaType("application/zip")
+                    : MediaType.APPLICATION_OCTET_STREAM;
             return ResponseEntity.ok()
                     .header("Content-Disposition", "attachment; filename=\"" + fileName + "\"")
-                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .contentType(contentType)
                     .body(new InputStreamResource(inputStream));
         } catch (InvalidPathException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse("Invalid or missing path")); //400
