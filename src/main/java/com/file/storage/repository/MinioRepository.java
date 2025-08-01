@@ -1,21 +1,21 @@
-package com.file.storage.service;
+package com.file.storage.repository;
 
 import io.minio.*;
 import io.minio.errors.ErrorResponseException;
 import io.minio.messages.Item;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Repository;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.io.InputStream;
 
-@Service
-public class MinioService {
+@Repository
+public class MinioRepository {
     private final MinioClient minioClient;
     private final String bucketName;
 
-    public MinioService(MinioClient minioClient,
-                        @Value("${minio.bucket-name}") String bucketName) {
+    public MinioRepository(MinioClient minioClient,
+                           @Value("${minio.bucket-name}") String bucketName) {
         this.minioClient = minioClient;
         this.bucketName = bucketName;
     }
@@ -31,6 +31,7 @@ public class MinioService {
         if (recursive != null) {
             builder.recursive(recursive);
         }
+
         return minioClient.listObjects(builder.build());
     }
 

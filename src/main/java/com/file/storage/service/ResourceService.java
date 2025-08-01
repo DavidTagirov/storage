@@ -5,8 +5,8 @@ import com.file.storage.dto.ResourceInfoResponse;
 import com.file.storage.exceptions.ResourceAlreadyExistsException;
 import com.file.storage.exceptions.ResourceNotFoundException;
 import com.file.storage.model.User;
+import com.file.storage.repository.MinioRepository;
 import com.file.storage.repository.UserRepository;
-import io.minio.errors.*;
 import jakarta.annotation.PostConstruct;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -14,8 +14,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
 import java.nio.file.InvalidPathException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -24,21 +22,23 @@ import java.util.zip.ZipOutputStream;
 @Service
 public class ResourceService {
     private final UserRepository userRepository;
-    private final MinioService minioService;
+    private final MinioRepository minioRepository;
 
     public ResourceService(
             UserRepository userRepository,
-            MinioService minioService) {
+            MinioRepository minioRepository) {
         this.userRepository = userRepository;
-        this.minioService = minioService;
+        this.minioRepository = minioRepository;
     }
 
     @PostConstruct
     public void initUserFolders() {
-        minioService.ensureBucketExists();
+        minioRepository.ensureBucketExists();
+
         userRepository.findAll().forEach(user -> {
             String userFolder = "user-" + user.getId() + "-files/";
-            if (!minioService.resourceOrDirectoryExists(userFolder)) {
+
+            if (!minioRepository.resourceOrDirectoryExists(userFolder)) {
                 createEmptyDirectory(userFolder);
             }
         });
@@ -50,65 +50,55 @@ public class ResourceService {
         if (path.endsWith("/")) {
             throw new InvalidPathException("", "Its cannot be a directory");
         }
-        if (!minioService.resourceOrDirectoryExists(path)) {
+        if (!minioRepository.resourceOrDirectoryExists(path)) {
             throw new ResourceNotFoundException();
         }
+
         return new ResourceInfoResponse(
                 getParentPath(path),
                 getName(path),
-                minioService.statObject(path).size(),
+                minioRepository.statObject(path).size(),
                 ResourceType.FILE
         );
-    }
-
-    private String getName(String path) {
-        path = path.replaceFirst("^user-\\d+-files/", "");
-
-        if (path.isEmpty() || path.equals("/")) {
-            throw new InvalidPathException("", "Empty path");
-        }
-        int lastSlash = path.lastIndexOf("/", path.length() - 2);
-        return lastSlash <= 0 ? path : path.substring(lastSlash + 1);
-    }
-
-    private String getParentPath(String path) {
-        if (path == null || path.isEmpty() || path.equals("/")) {
-            return "";
-        }
-        path = path.replaceFirst("^user-\\d+-files/", "");
-
-        if (path.endsWith("/")) {
-            int penultimateSlash = path.lastIndexOf("/", path.length() - 2);
-            return penultimateSlash <= 0 ? "" : path.substring(0, penultimateSlash + 1);
-        } else {
-            int lastSlash = path.lastIndexOf("/");
-            return lastSlash <= 0 ? "" : path.substring(0, lastSlash + 1);
-        }
     }
 
     public void deleteResource(String path, String username) {
         path = validatePath(path, username);
 
-        if (!minioService.resourceOrDirectoryExists(path)) {
+        if (!minioRepository.resourceOrDirectoryExists(path)) {
             throw new ResourceNotFoundException();
         }
+
         if (path.endsWith("/")) {
             deleteDirectory(path);
         } else {
-            minioService.removeObject(path);
+            minioRepository.removeObject(path);
+        }
+    }
+
+    private void deleteDirectory(String fullPath) {
+        var objects = minioRepository.listObjects(fullPath, null, true);
+
+        for (var object : objects) {
+            try {
+                minioRepository.removeObject(object.get().objectName());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
     public InputStream downloadResource(String path, String username) throws IOException {
         path = validatePath(path, username);
 
-        if (!minioService.resourceOrDirectoryExists(path)) {
+        if (!minioRepository.resourceOrDirectoryExists(path)) {
             throw new ResourceNotFoundException();
         }
+
         if (path.endsWith("/")) {
             return downloadAsZip(path);
         } else {
-            return minioService.getObject(path);
+            return minioRepository.getObject(path);
         }
     }
 
@@ -122,21 +112,24 @@ public class ResourceService {
             } catch (Exception e) {
                 try {
                     out.close();
-                } catch (IOException ignored) {}
+                } catch (IOException ignored) {
+                }
             }
         }).start();
+
         return in;
     }
 
     private void addFilesToZip(ZipOutputStream zipOutputStream, String fullPath) {
-        var objects = minioService.listObjects(fullPath, null, true);
+        var objects = minioRepository.listObjects(fullPath, null, true);
 
         for (var object : objects) {
             try {
                 if (!object.get().isDir()) {
                     String fileName = object.get().objectName().substring(fullPath.length());
                     zipOutputStream.putNextEntry(new ZipEntry(fileName));
-                    minioService.getObject(object.get().objectName()).transferTo(zipOutputStream);
+
+                    minioRepository.getObject(object.get().objectName()).transferTo(zipOutputStream);
                     zipOutputStream.closeEntry();
                 }
             } catch (Exception e) {
@@ -149,19 +142,20 @@ public class ResourceService {
         from = validatePath(from, username);
         to = validatePath(to, username);
 
-        if (!minioService.resourceOrDirectoryExists(from)) {
+        if (!minioRepository.resourceOrDirectoryExists(from)) {
             throw new ResourceNotFoundException();
         }
-        if (minioService.resourceOrDirectoryExists(to)) {
+        if (minioRepository.resourceOrDirectoryExists(to)) {
             throw new ResourceAlreadyExistsException();
         }
-        minioService.copyObject(from, to);
-        minioService.removeObject(from);
+
+        minioRepository.copyObject(from, to);
+        minioRepository.removeObject(from);
 
         return new ResourceInfoResponse(
                 getParentPath(to),
                 getName(to),
-                minioService.statObject(to).size(),
+                minioRepository.statObject(to).size(),
                 ResourceType.FILE
         );
     }
@@ -169,44 +163,45 @@ public class ResourceService {
     public List<ResourceInfoResponse> searchResource(String query, String username) {
         query = validatePath(query, username);
 
-        var objects = minioService.listObjects(query, null, true);
-        List<ResourceInfoResponse> resourceList = new ArrayList<>();
+        var objects = minioRepository.listObjects(query, null, true);
 
+        List<ResourceInfoResponse> resourceList = new ArrayList<>();
         for (var object : objects) {
             try {
                 String filePath = object.get().objectName();
-
                 if (filePath.toLowerCase().contains(query.toLowerCase())) {
                     resourceList.add(new ResourceInfoResponse(
                             getParentPath(filePath),
                             getName(filePath),
-                            minioService.statObject(filePath).size(),
+                            minioRepository.statObject(filePath).size(),
                             ResourceType.FILE
                     ));
                 }
-            } catch (ErrorResponseException | InsufficientDataException | InternalException | InvalidKeyException |
-                     InvalidResponseException | IOException | NoSuchAlgorithmException | ServerException |
-                     XmlParserException e) {
+            } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
+
         return resourceList;
     }
 
     public List<ResourceInfoResponse> uploadResource(String path, List<MultipartFile> files, String username) {
         path = validateDirectoryPath(path, username);
+
         List<ResourceInfoResponse> resourceList = new ArrayList<>();
 
         for (MultipartFile file : files) {
             String fullPath = path + file.getOriginalFilename();
 
-            if (minioService.resourceOrDirectoryExists(fullPath)) {
+            if (minioRepository.resourceOrDirectoryExists(fullPath)) {
                 throw new ResourceAlreadyExistsException();
             }
+
             createParentDirectories(path);
 
             try (InputStream inputStream = file.getInputStream()) {
-                minioService.putObject(fullPath, inputStream, file.getSize(), -1);
+                minioRepository.putObject(fullPath, inputStream, file.getSize(), -1);
+
                 resourceList.add(new ResourceInfoResponse(
                         getParentPath(fullPath),
                         getName(fullPath),
@@ -217,6 +212,7 @@ public class ResourceService {
                 throw new RuntimeException("Failed to upload file: " + file.getOriginalFilename(), e);
             }
         }
+
         return resourceList;
     }
 
@@ -228,26 +224,25 @@ public class ResourceService {
             if (part.isEmpty()) {
                 continue;
             }
+
             currentPath.append(part).append("/");
             String dirPath = currentPath.toString();
 
-            if (!minioService.resourceOrDirectoryExists(dirPath)) {
+            if (!minioRepository.resourceOrDirectoryExists(dirPath)) {
                 createEmptyDirectory(dirPath);
             }
         }
     }
 
-    private void createEmptyDirectory(String path) {
-        minioService.putObject(path, new ByteArrayInputStream(new byte[0]), 0, -1);
-    }
-
     public List<ResourceInfoResponse> getDirectoryInfo(String path, String username) {
         path = validateDirectoryPath(path, username);
 
-        if (!minioService.resourceOrDirectoryExists(path)) {
+        if (!minioRepository.resourceOrDirectoryExists(path)) {
             throw new ResourceNotFoundException();
         }
-        var objects = minioService.listObjects(path, "/", false);
+
+        var objects = minioRepository.listObjects(path, "/", false);
+
         List<ResourceInfoResponse> resourceList = new ArrayList<>();
 
         for (var object : objects) {
@@ -258,6 +253,7 @@ public class ResourceService {
                 if (objectName.equals(path) || (objectName + "/").equals(path)) {
                     continue;
                 }
+
                 if (object.get().isDir()) {
                     resource = new ResourceInfoResponse(
                             path.replaceFirst("^user-\\d+-files/", ""),
@@ -269,27 +265,30 @@ public class ResourceService {
                     resource = new ResourceInfoResponse(
                             path.replaceFirst("^user-\\d+-files/", ""),
                             objectName.substring(path.length()),
-                            minioService.statObject(objectName).size(),
+                            minioRepository.statObject(objectName).size(),
                             ResourceType.FILE
                     );
                 }
                 resourceList.add(resource);
+
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
+
         return resourceList;
     }
 
     public ResourceInfoResponse createDirectory(String path, String username) {
         path = validateDirectoryPath(path, username);
 
-        if (!getParentPath(path).isEmpty() && !minioService.resourceOrDirectoryExists(getParentPath(path))) {
+        if (!getParentPath(path).isEmpty() && !minioRepository.resourceOrDirectoryExists(getParentPath(path))) {
             throw new ResourceNotFoundException();
         }
-        if (minioService.resourceOrDirectoryExists(path)) {
+        if (minioRepository.resourceOrDirectoryExists(path)) {
             throw new ResourceAlreadyExistsException();
         }
+
         createEmptyDirectory(path);
 
         return new ResourceInfoResponse(
@@ -304,7 +303,9 @@ public class ResourceService {
             throw new InvalidPathException("", "Invalid path");
         }
         path = path.replaceFirst("^user-\\d+-files/", "");
+
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
         return ("user-" + user.getId() + "-files/" + path)
                 .replaceAll("/+", "/")
                 .replaceAll(" +", "")
@@ -313,22 +314,46 @@ public class ResourceService {
 
     private String validateDirectoryPath(String path, String username) {
         path = path.replaceFirst("^user-\\d+-files/", "");
+
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
         return ("user-" + user.getId() + "-files/" + path + "/")
                 .replaceAll("/+", "/")
                 .replaceAll(" +", "")
                 .trim();
     }
 
-    private void deleteDirectory(String fullPath) {
-        var objects = minioService.listObjects(fullPath, null, true);
+    private String getName(String path) {
+        path = path.replaceFirst("^user-\\d+-files/", "");
 
-        for (var object : objects) {
-            try {
-                minioService.removeObject(object.get().objectName());
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+        if (path.isEmpty() || path.equals("/")) {
+            throw new InvalidPathException("", "Empty path");
         }
+
+        int lastSlash = path.lastIndexOf("/", path.length() - 2);
+
+        return lastSlash <= 0 ? path : path.substring(lastSlash + 1);
+    }
+
+    private String getParentPath(String path) {
+        if (path == null || path.isEmpty() || path.equals("/")) {
+            return "";
+        }
+
+        path = path.replaceFirst("^user-\\d+-files/", "");
+
+        if (path.endsWith("/")) {
+            int penultimateSlash = path.lastIndexOf("/", path.length() - 2);
+
+            return penultimateSlash <= 0 ? "" : path.substring(0, penultimateSlash + 1);
+        } else {
+            int lastSlash = path.lastIndexOf("/");
+
+            return lastSlash <= 0 ? "" : path.substring(0, lastSlash + 1);
+        }
+    }
+
+    private void createEmptyDirectory(String path) {
+        minioRepository.putObject(path, new ByteArrayInputStream(new byte[0]), 0, -1);
     }
 }

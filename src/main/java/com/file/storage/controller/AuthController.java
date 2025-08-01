@@ -37,7 +37,7 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping("/sign-up")
-    public ResponseEntity<?> signUp(@Valid @RequestBody SignUpRequest signUpRequest, HttpServletRequest request) { // <-- Добавлен HttpServletRequest
+    public ResponseEntity<?> signUp(@Valid @RequestBody SignUpRequest signUpRequest, HttpServletRequest request) {
         try {
             UserResponse userResponse = authService.signUp(signUpRequest, request);
             return ResponseEntity.status(HttpStatus.CREATED).body(userResponse);

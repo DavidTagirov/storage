@@ -33,7 +33,6 @@ class MinioConfigTest {
     void minioClientShouldBeConfigured() throws Exception {
         assertNotNull(minioClient);
 
-        // Проверяем, что можем создать бакет
         String bucketName = "test-bucket";
         if (!minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build())) {
             minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());

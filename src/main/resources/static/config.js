@@ -35,8 +35,8 @@ window.APP_CONFIG = {
 
     //корректный пароль
     validPassword: {
-        minLength: 5,
-        maxLength: 255,
+        minLength: 6,
+        maxLength: 50,
         pattern: "^[a-zA-Z0-9!@#$%^&*(),.?\":{}|<>[\\]/`~+=-_';]*$",
     },
 

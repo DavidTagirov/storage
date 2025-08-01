@@ -40,25 +40,25 @@ public class MinioConfig {
                     .credentials(accessKey, secretKey)
                     .build();
 
-            boolean isExist = minioClient.bucketExists(
-                    BucketExistsArgs.builder()
-                            .bucket(bucketName)
-                            .build());
+            boolean isExist = minioClient.bucketExists(BucketExistsArgs.builder()
+                    .bucket(bucketName)
+                    .build()
+            );
 
             if (!isExist) {
-                log.info("Bucket '{}' not found. Attempting to create it.", bucketName);
-                minioClient.makeBucket(
-                        MakeBucketArgs.builder()
-                                .bucket(bucketName)
-                                .build());
-                log.info("Bucket '{}' created successfully.", bucketName);
+                log.info("Bucket '{}' not found. Attempting to create it", bucketName);
+                minioClient.makeBucket(MakeBucketArgs.builder()
+                        .bucket(bucketName)
+                        .build()
+                );
+                log.info("Bucket '{}' created successfully", bucketName);
             } else {
-                log.info("Bucket '{}' already exists.", bucketName);
+                log.info("Bucket '{}' already exists", bucketName);
             }
 
             return minioClient;
         } catch (Exception e) {
-            log.error("FATAL: Could not connect to MinIO. Please check your configuration and network.", e);
+            log.error("Could not connect to MinIO", e);
             throw new RuntimeException("Ошибка при подключении к MinIO: " + e.getMessage(), e);
         }
     }

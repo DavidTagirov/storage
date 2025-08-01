@@ -31,9 +31,7 @@ public class AuthService {
 
     @Transactional
     public UserResponse signUp(SignUpRequest request, HttpServletRequest httpRequest) {
-        log.info("Attempting to register user: {}", request.username());
         if (userRepository.existsByUsername(request.username())) {
-            log.warn("Username already exists: {}", request.username());
             throw new UsernameAlreadyExistsException();
         }
 
@@ -41,7 +39,6 @@ public class AuthService {
         user.setUsername(request.username());
         user.setPassword(passwordEncoder.encode(request.password()));
         userRepository.save(user);
-        log.info("User registered successfully: {}", user);
 
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -52,7 +49,6 @@ public class AuthService {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         httpRequest.getSession(true);
-        log.debug("Created new session for user: {}", request.username());
 
         return new UserResponse(user.getUsername());
     }
@@ -66,7 +62,6 @@ public class AuthService {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             httpRequest.getSession(true);
-            log.debug("Created new session for user: {}", request.username());
 
 
             SecurityContext context = SecurityContextHolder.createEmptyContext();
@@ -79,7 +74,6 @@ public class AuthService {
 
             return new UserResponse(request.username());
         } catch (AuthenticationException e) {
-            log.warn("Failed login attempt for user: {}", request.username());
             throw new WrongUsernameOrPassword();
         }
     }
@@ -90,7 +84,6 @@ public class AuthService {
 
         if (session != null) {
             session.invalidate();
-            log.debug("Session invalidated for user");
         }
     }
 }
