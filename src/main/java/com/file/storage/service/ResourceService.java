@@ -308,7 +308,6 @@ public class ResourceService {
 
         return ("user-" + user.getId() + "-files/" + path)
                 .replaceAll("/+", "/")
-                .replaceAll(" +", "")
                 .trim();
     }
 
@@ -319,7 +318,6 @@ public class ResourceService {
 
         return ("user-" + user.getId() + "-files/" + path + "/")
                 .replaceAll("/+", "/")
-                .replaceAll(" +", "")
                 .trim();
     }
 
