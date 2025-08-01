@@ -1,8 +1,0 @@
-com\file\storage\StorageApplicationTests.class
-com\file\storage\config\SecurityConfigTest.class
-com\file\storage\controller\UserControllerTest.class
-com\file\storage\integration\StorageApplicationIntegrationTest.class
-com\file\storage\config\MinioConfigTest.class
-com\file\storage\integration\MinioFileStorageTest.class
-com\file\storage\integration\SecurityIntegrationTest.class
-com\file\storage\controller\AuthControllerIntegrationTest.class
